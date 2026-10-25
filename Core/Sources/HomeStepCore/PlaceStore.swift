@@ -1,27 +1,27 @@
+import Combine
 import Foundation
 
 /// The user's places, saved on this iPhone only.
 ///
-/// The ARKit thread looks markers up without touching the main actor, so every
-/// change also publishes a copy of the active place into `activeSnapshot`.
+/// The ARKit thread reads the active place without touching the main actor,
+/// so every change also publishes a copy of it into `activeSnapshot`.
 @MainActor
-final class PlaceStore: ObservableObject {
-    @Published private(set) var places: [Place] = []
-    @Published var activePlaceID: UUID? {
+public final class PlaceStore: ObservableObject {
+    @Published public private(set) var places: [Place] = []
+    @Published public var activePlaceID: UUID? {
         didSet { publishSnapshot(); save() }
     }
 
-    nonisolated let activeSnapshot = LockedBox<Place?>(nil)
+    public nonisolated let activeSnapshot = LockedBox<Place?>(nil)
 
     /// A storage problem the user has to hear about. Losing places silently
     /// would mean hazard markers quietly stop working.
-    @Published var problem: String?
+    @Published public var problem: String?
 
-    var activePlace: Place? { places.first { $0.id == activePlaceID } }
+    public var activePlace: Place? { places.first { $0.id == activePlaceID } }
 
-    private let fileURL: URL
+    public let fileURL: URL
 
-    /// The saved file, versioned so the format can change later.
     private struct File: Codable {
         var version = 1
         var activePlaceID: UUID?
@@ -35,12 +35,12 @@ final class PlaceStore: ObservableObject {
         var place: Place
     }
 
-    init(directory: URL = PlaceStore.defaultDirectory) {
+    public init(directory: URL = PlaceStore.defaultDirectory) {
         fileURL = directory.appendingPathComponent("places.json")
         load()
     }
 
-    nonisolated static var defaultDirectory: URL {
+    public nonisolated static var defaultDirectory: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
@@ -48,29 +48,30 @@ final class PlaceStore: ObservableObject {
 
     // MARK: Places
 
+    /// The first place added becomes the one in use.
     @discardableResult
-    func addPlace(named name: String) -> Place {
+    public func addPlace(named name: String) -> Place {
         let place = Place(name: name)
         places.append(place)
         if activePlaceID == nil { activePlaceID = place.id } else { save() }
         return place
     }
 
-    func rename(_ id: UUID, to name: String) {
+    public func rename(_ id: UUID, to name: String) {
         mutate(id) { $0.name = name }
     }
 
     /// Deleting the place in use leaves no place in use rather than switching
     /// to another. Every place numbers its markers from 1, so a silent switch
     /// would change what the markers on the walls mean.
-    func delete(_ id: UUID) {
+    public func delete(_ id: UUID) {
         places.removeAll { $0.id == id }
         if activePlaceID == id { activePlaceID = nil } else { save() }
     }
 
     // MARK: Landmarks
 
-    func upsert(_ landmark: Landmark, in placeID: UUID) {
+    public func upsert(_ landmark: Landmark, in placeID: UUID) {
         mutate(placeID) { place in
             if let i = place.landmarks.firstIndex(where: { $0.id == landmark.id }) {
                 place.landmarks[i] = landmark
@@ -81,22 +82,24 @@ final class PlaceStore: ObservableObject {
         }
     }
 
-    func deleteLandmark(_ id: UUID, in placeID: UUID) {
+    public func deleteLandmark(_ id: UUID, in placeID: UUID) {
         mutate(placeID) { $0.landmarks.removeAll { $0.id == id } }
     }
 
     // MARK: Sharing
 
-    func exportData(_ place: Place) throws -> Data {
+    public func exportData(_ place: Place) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(Export(place: place))
     }
 
-    /// Accepts a shared HomeStep place or the first version's `home_map.json`.
-    /// It gets new identities, so importing a file twice gives two copies.
+    /// Adds a shared place, or the first version's `home_map.json`. It gets new
+    /// identities, so importing a file twice gives two copies, and it isn't
+    /// switched on: changing places changes what every marker means, so that
+    /// stays the user's choice.
     @discardableResult
-    func importPlace(from data: Data) throws -> Place {
+    public func importPlace(from data: Data) throws -> Place {
         var place: Place
         if let export = try? JSONDecoder().decode(Export.self, from: data) {
             place = export.place
@@ -110,12 +113,18 @@ final class PlaceStore: ObservableObject {
         return place
     }
 
+    /// Adds the sample place, through import so it gets fresh identities.
+    @discardableResult
+    public func importSample() -> Place {
+        (try? importPlace(from: exportData(.sample()))) ?? addPlace(named: "Sample home")
+    }
+
     /// Two landmarks with one number would make one unreachable, so duplicates
     /// get the next free number. Hazards go first, so a printed hazard marker
     /// keeps meaning the hazard.
     private static func renumberingDuplicates(_ landmarks: [Landmark]) -> [Landmark] {
         var used = Set<Int>()
-        var out: [Landmark] = []
+        var result: [Landmark] = []
         let hazardsFirst = landmarks.filter(\.isHazard) + landmarks.filter { !$0.isHazard }
         for var lm in hazardsFirst {
             lm.id = UUID()
@@ -125,12 +134,12 @@ final class PlaceStore: ObservableObject {
                 lm.marker = n
             }
             used.insert(lm.marker)
-            out.append(lm)
+            result.append(lm)
         }
-        return out.sorted { $0.marker < $1.marker }
+        return result.sorted { $0.marker < $1.marker }
     }
 
-    // MARK: Persistence
+    // MARK: Saving
 
     private func mutate(_ id: UUID, _ change: (inout Place) -> Void) {
         guard let i = places.firstIndex(where: { $0.id == id }) else { return }
@@ -166,7 +175,11 @@ final class PlaceStore: ObservableObject {
         let file = File(activePlaceID: activePlaceID, places: places)
         do {
             let data = try JSONEncoder().encode(file)
+            #if os(iOS)
             try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            #else
+            try data.write(to: fileURL, options: .atomic)
+            #endif
         } catch {
             problem = "HomeStep couldn't save your places (\(error.localizedDescription)). Recent changes may be lost."
         }

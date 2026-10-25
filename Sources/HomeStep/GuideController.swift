@@ -1,6 +1,7 @@
 import ARKit
 import AVFoundation
 import Combine
+import HomeStepCore
 
 /// Runs a guiding session. Owns the ARSession, passes every frame to the step
 /// detector (`ReflexLayer`) and the marker reader (`MarkerLayer`), and sends what
@@ -23,19 +24,18 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
     private static let warnDistanceKey = "reflex.warnDistance"
 
     func adjustWarnDistance(by delta: Float) {
-        let t = reflex.t
-        let next = min(t.maxWarnDistance, max(t.minWarnDistance, warnDistance + delta))
+        let next = reflex.settings.clampWarnDistance(warnDistance + delta)
         warnDistance = next
         reflex.warnDistance.set(next)
         UserDefaults.standard.set(Double(next), forKey: Self.warnDistanceKey)
         logger.log("warnDistance", ["value": next])
-        announcer.status(String(format: "Step warning at %.2f metres", next))
+        announcer.status(Phrases.warnDistance(next))
     }
 
     private func restoreWarnDistance() {
         let stored = UserDefaults.standard.object(forKey: Self.warnDistanceKey) as? Double
-        let v = stored.map { Float($0) } ?? 0.45
-        warnDistance = min(reflex.t.maxWarnDistance, max(reflex.t.minWarnDistance, v))
+        let v = stored.map { Float($0) } ?? reflex.settings.defaultWarnDistance
+        warnDistance = reflex.settings.clampWarnDistance(v)
         reflex.warnDistance.set(warnDistance)
     }
 
@@ -49,14 +49,7 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
         #if DEBUG
         if demoAim { return "Aim OK (42°)" }
         #endif
-        guard let r = reading else { return "Waiting for depth…" }
-        // Tilt comes first: aimed too flat, the floor never reaches the
-        // reference strip and steps can't be detected at all.
-        if r.pitchDegrees < 25 { return "TILT DOWN — aiming too flat (\(Int(r.pitchDegrees))°)" }
-        if r.pitchDegrees > 58 { return "TILT UP — aiming too steep (\(Int(r.pitchDegrees))°)" }
-        if r.nearCount < 12 { return "Can't see the floor underfoot — tilt down" }
-        if r.farCount < 12 { return "Can't see the floor ahead — tilt up" }
-        return "Aim OK (\(Int(r.pitchDegrees))°)"
+        return Aim.hint(for: reading)
     }
 
     /// Not private only so the camera window and "See what HomeStep sees" can
@@ -86,57 +79,25 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
     /// frames stopped. He can't see that the app has stopped, so it has to be
     /// said (see `checkLiveness`).
     private nonisolated let lastFrameAt = LockedBox<Date>(.distantPast)
-    private var guidanceStalled = false
+    private var liveness = LivenessMonitor()
+    private var aimFaults = AimFaultMonitor()
     private var watchdog: Task<Void, Never>?
-    /// Frames can pause briefly. Longer than this and something is wrong: the
-    /// app is in the background, the phone is locked or too hot.
-    private let stallSeconds: TimeInterval = 2.5
-    private var blindFrames = 0
-    private var lastAimWarningAt = Date.distantPast
     private let logger = SessionLogger()
-    @Published var sessionCount = SessionLogger.sessionCount()
+    @Published var sessionCount = 0
 
     /// Mark the last few seconds as wrong in the log. Only the person walking
     /// knows whether a warning was right, so this is how a bad one gets found
     /// later in the readings.
     func markWrong() {
-        logger.log("mark", ["label": "wrong", "reading": readingFields(reading)])
-        announcer.say("Marked.")
-    }
-
-    private func readingFields(_ r: ReflexLayer.Reading?) -> [String: Any] {
-        guard let r else { return [:] }
-        var f: [String: Any] = [
-            "near": r.nearCount, "far": r.farCount,
-            "pitch": r.pitchDegrees, "swing": r.swingDegreesPerSecond,
-            "speed": r.groundSpeed, "walking": r.isWalking,
-        ]
-        if let v = r.floorReference, v.isFinite { f["ref"] = v }
-        if let v = r.floorNow, v.isFinite { f["probe"] = v }
-        if let v = r.probeLow, v.isFinite { f["low"] = v }
-        if let v = r.dropVsReference, v.isFinite { f["drop"] = v }
-        if let v = r.obstacleAhead, v.isFinite { f["obstacle"] = v }
-        if let v = r.fallCoverage { f["fallCov"] = v }
-        if let v = r.riseCoverage { f["riseCov"] = v }
-        return f
-    }
-
-    private func eventName(_ e: AnnouncerEvent) -> String {
-        switch e {
-        case .hazard(let text): return "hazard:\(text)"
-        case .step(let text, let d, let speak):
-            return "step:\(text) d=\(String(format: "%.2f", d)) spoken=\(speak)"
-        case .proximity: return "proximity"
-        case .clear: return "clear"
-        case .landmark(let lm): return "landmark:\(lm.marker)"
-        case .cognition: return "cognition"
-        }
+        logger.log("mark", ["label": "wrong", "reading": reading?.logFields ?? [:]])
+        announcer.say(Phrases.marked)
     }
 
     init(places: PlaceStore, settings: AppSettings) {
         self.activePlace = places.activeSnapshot
         self.settings = settings
         super.init()
+        sessionCount = logger.sessionCount()
         restoreWarnDistance()
         session.delegate = self
         settingsSink = settings.objectWillChange.sink { [weak self] in
@@ -150,7 +111,7 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
             DispatchQueue.main.async {
                 guard let self, self.isRunning else { return }
                 let name = places?.places.first { $0.id == id }?.name
-                self.announcer.alert(name.map { "Now using place \($0)." } ?? "No place in use. Markers are off.")
+                self.announcer.alert(Phrases.placeChanged(to: name))
             }
         }
         // Action button or Shortcut: "Where am I?"
@@ -176,8 +137,7 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
     #endif
 
     private func applySettings() {
-        announcer.settings = .init(speech: settings.speech, tones: settings.tones,
-                                   haptics: settings.haptics, rate: settings.speechRate)
+        announcer.settings = settings.announcerSettings
     }
 
     private func makeConfiguration() -> ARWorldTrackingConfiguration {
@@ -223,13 +183,8 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
 
     /// Repeat the last marker read. This is the Action button's job.
     func whereAmI() {
-        guard let last = lastLandmark else {
-            announcer.status(isRunning ? "No marker read yet." : "HomeStep is stopped. No marker read yet.")
-            return
-        }
-        let minutes = Int(Date().timeIntervalSince(last.at) / 60)
-        let when = minutes < 1 ? "just now" : minutes == 1 ? "a minute ago" : "\(minutes) minutes ago"
-        announcer.status("Last marker: \(last.name), \(when).")
+        announcer.status(Phrases.whereAmI(lastLandmark: lastLandmark?.name, readAt: lastLandmark?.at,
+                                          isRunning: isRunning, now: Date()))
     }
 
     /// Say a landmark exactly as it will sound while walking, so it can be
@@ -241,13 +196,13 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
     func start() {
         guard ARWorldTrackingConfiguration.isSupported else {
             statusText = "This iPhone can't run HomeStep."
-            announcer.alert("This phone does not support HomeStep's camera tracking.")
+            announcer.alert(Phrases.notSupported)
             return
         }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .denied, .restricted:
             statusText = "Camera access is off. Turn it on in Settings, HomeStep."
-            announcer.alert("HomeStep needs the camera. Turn on camera access in the Settings app.")
+            announcer.alert(Phrases.needsCamera)
             return
         default: break   // .notDetermined: ARKit asks on first run
         }
@@ -264,9 +219,8 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
         session.run(config, options: [.resetTracking, .removeExistingAnchors])
         UIApplication.shared.isIdleTimerDisabled = true
         isRunning = true
-        guidanceStalled = false
-        blindFrames = 0
-        lastAimWarningAt = .distantPast
+        liveness.reset()
+        aimFaults.reset()
         lastFrameAt.set(Date())
         startWatchdog()
         if settings.developerMode { logger.begin() }
@@ -275,16 +229,16 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
         statusText = "Guiding"
         if !hasDepth {
             statusText = "Markers only"
-            announcer.alert("Step detection needs a LiDAR iPhone. Reading markers only. Use your cane.")
+            announcer.alert(Phrases.noLiDAR)
         } else {
             // Always answer Start out loud.
             let place = activePlace.get()?.name
-            announcer.status(place.map { "Guiding. \($0)." } ?? "Guiding. Watching for steps and obstacles.")
+            announcer.status(Phrases.guiding(place: place))
         }
 
         // Low Power Mode can lower the frame rate the detector relies on.
         if ProcessInfo.processInfo.isLowPowerModeEnabled {
-            announcer.say("Low power mode is on.")
+            announcer.say(Phrases.lowPower)
         }
     }
 
@@ -309,41 +263,33 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
     /// about 40° down, so steps couldn't be detected at all. The screen said so
     /// the whole time, but nobody looks at the screen while he walks.
     private func checkAim() {
-        guard isRunning, hasDepth, !guidanceStalled, let r = reading else { return }
-        let blind = r.nearCount < 12
-        if blind {
-            blindFrames += 1
-            // A sweep can lift the floor out of view briefly, but not for 3 s.
-            if blindFrames >= 3, Date().timeIntervalSince(lastAimWarningAt) > 12 {
-                lastAimWarningAt = Date()
-                announcer.alert("Cannot see the floor. Tilt the phone down.")
-                logger.log("aimFault", ["pitch": r.pitchDegrees, "near": r.nearCount])
-            }
-        } else {
-            blindFrames = 0
+        guard isRunning, hasDepth, !liveness.isStalled, let r = reading else { return }
+        if aimFaults.check(nearCount: r.nearCount, now: Date()) {
+            announcer.alert(Phrases.cannotSeeFloor)
+            logger.log("aimFault", ["pitch": r.pitchDegrees, "near": r.nearCount])
         }
     }
 
     private func checkLiveness() {
         guard isRunning else { return }
-        let stale = Date().timeIntervalSince(lastFrameAt.get()) > stallSeconds
-        if stale && !guidanceStalled {
-            guidanceStalled = true
+        switch liveness.check(lastFrameAt: lastFrameAt.get(), now: Date()) {
+        case .stalled:
             statusText = "NOT GUIDING"
-            announcer.alert("Guidance stopped. Use your cane.")
-        } else if !stale && guidanceStalled {
-            guidanceStalled = false
+            announcer.alert(Phrases.guidanceStopped)
+        case .resumed:
             statusText = hasDepth ? "Guiding" : "Markers only"
             // ARKit's origin may have moved during the gap, so start fresh.
             reflex.reset()
-            announcer.alert("Guidance resumed.")
+            announcer.alert(Phrases.guidanceResumed)
+        case nil:
+            break
         }
     }
 
     func stop() {
         watchdog?.cancel()
         watchdog = nil
-        guidanceStalled = false
+        liveness.reset()
         session.pause()
         // Pausing stops new events, but speech and queued tones are already
         // playing. Stop silences those too.
@@ -354,7 +300,7 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
         reading = nil
         logger.log("stop")
         logger.close()
-        sessionCount = SessionLogger.sessionCount()
+        sessionCount = logger.sessionCount()
         statusText = "Stopped"
     }
 
@@ -375,7 +321,7 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
         Task { @MainActor in
             guard isRunning else { return }
             statusText = "PAUSED"
-            announcer.alert("Guidance paused. Use your cane.")
+            announcer.alert(Phrases.guidancePaused)
         }
     }
 
@@ -385,9 +331,9 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
             // ARKit's origin can move after an interruption, so start fresh.
             reflex.reset()
             lastFrameAt.set(Date())
-            guidanceStalled = false
+            liveness.reset()
             statusText = hasDepth ? "Guiding" : "Markers only"
-            announcer.alert("Guidance resumed.")
+            announcer.alert(Phrases.guidanceResumed)
         }
     }
 
@@ -397,7 +343,7 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
             // would cut off this warning.
             stop()
             statusText = "GUIDANCE FAILED"
-            announcer.alert("Guidance failed. Use your cane.")
+            announcer.alert(Phrases.guidanceFailed)
         }
     }
 
@@ -405,7 +351,7 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
         lastFrameAt.set(Date())
         // Steps and obstacles, on this thread, every frame.
         let outcome = reflex.process(frame: frame)
-        if let event = outcome.event {
+        if let outcome, let event = outcome.event {
             Task { @MainActor in
                 announcer.emit(event)
                 switch event {
@@ -416,14 +362,14 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
                 // Log every event with the numbers behind it, except "clear",
                 // which fires all the time while walking.
                 if case .clear = event {} else {
-                    self.logger.log("event", ["event": self.eventName(event),
-                                              "reading": self.readingFields(outcome.reading)])
+                    self.logger.log("event", ["event": event.logName,
+                                              "reading": outcome.reading.logFields])
                 }
             }
         }
         // Numbers for the readout: stored every frame, shown about 8 times a
         // second so the screen never slows the detector down.
-        if let r = outcome.reading {
+        if let r = outcome?.reading {
             latestReading.set(r)
             let now = Date()
             if now.timeIntervalSince(lastPublish.get()) > 0.12 {
@@ -431,7 +377,7 @@ final class GuideController: NSObject, ObservableObject, ARSessionDelegate {
                 Task { @MainActor in
                     self.reading = r
                     // About 8 readings a second, as context for events and marks.
-                    self.logger.log("reading", self.readingFields(r))
+                    self.logger.log("reading", r.logFields)
                 }
             }
         }

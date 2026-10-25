@@ -1,4 +1,5 @@
 import AppIntents
+import HomeStepCore
 
 /// "Where am I?" for the iPhone's Action button, Shortcuts, Back Tap or Siri:
 /// HomeStep repeats the last marker it read. The user assigns it in the

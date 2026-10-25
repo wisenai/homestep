@@ -1,4 +1,5 @@
 import SwiftUI
+import HomeStepCore
 
 /// Add or edit one landmark. The marker number is assigned, not typed, so two
 /// landmarks can never share a printed code.

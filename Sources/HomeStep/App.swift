@@ -1,4 +1,5 @@
 import SwiftUI
+import HomeStepCore
 
 @main
 struct HomeStepApp: App {

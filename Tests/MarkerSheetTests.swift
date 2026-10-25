@@ -2,6 +2,7 @@ import CoreImage
 import PDFKit
 import XCTest
 @testable import HomeStep
+import HomeStepCore
 
 final class MarkerSheetTests: XCTestCase {
 

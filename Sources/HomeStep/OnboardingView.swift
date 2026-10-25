@@ -1,5 +1,6 @@
 import AVFoundation
 import SwiftUI
+import HomeStepCore
 
 /// First launch: what HomeStep is, the safety page (which has to be
 /// acknowledged) and camera permission. Every page works with VoiceOver, since

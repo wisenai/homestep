@@ -1,5 +1,5 @@
 import XCTest
-@testable import HomeStep
+@testable import HomeStepCore
 
 @MainActor
 final class PlaceStoreTests: XCTestCase {
@@ -15,6 +15,7 @@ final class PlaceStoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: dir)
     }
 
+    // REQ-PLACE-01, REQ-PLACE-08
     func testPersistsAcrossLaunches() throws {
         let store = PlaceStore(directory: dir)
         let home = store.addPlace(named: "Home")
@@ -29,6 +30,7 @@ final class PlaceStoreTests: XCTestCase {
                        "the ARKit thread must see the restored place")
     }
 
+    // REQ-PLACE-02, REQ-PLACE-08
     func testFirstPlaceBecomesActiveAndSnapshotFollowsEdits() {
         let store = PlaceStore(directory: dir)
         XCTAssertNil(store.activeSnapshot.get())
@@ -38,6 +40,7 @@ final class PlaceStoreTests: XCTestCase {
         XCTAssertEqual(store.activeSnapshot.get()?.landmark(forMarker: 4)?.name, "Desk")
     }
 
+    // REQ-PLACE-01
     func testUpsertReplacesExistingLandmark() {
         let store = PlaceStore(directory: dir)
         let home = store.addPlace(named: "Home")
@@ -48,6 +51,7 @@ final class PlaceStoreTests: XCTestCase {
         XCTAssertEqual(store.activePlace?.landmarks.map(\.name), ["Kitchen door"])
     }
 
+    // REQ-PLACE-06
     func testCorruptFileIsKeptAndStoreStartsEmpty() throws {
         let file = dir.appendingPathComponent("places.json")
         try Data("{not json".utf8).write(to: file)
@@ -58,6 +62,7 @@ final class PlaceStoreTests: XCTestCase {
             "a corrupt file must be preserved, not silently overwritten")
     }
 
+    // REQ-PLACE-03
     func testDeletingActivePlaceClearsSnapshotOrMovesOn() {
         let store = PlaceStore(directory: dir)
         let a = store.addPlace(named: "A")
@@ -74,6 +79,7 @@ final class PlaceStoreTests: XCTestCase {
         XCTAssertNil(store.activeSnapshot.get())
     }
 
+    // REQ-PLACE-04
     func testExportImportRoundTripGetsNewIdentity() throws {
         let store = PlaceStore(directory: dir)
         let home = store.addPlace(named: "Home")
@@ -86,14 +92,16 @@ final class PlaceStoreTests: XCTestCase {
         XCTAssertEqual(store.places.count, 2)
     }
 
+    // REQ-PLACE-04
     func testImportsLegacyHomeMap() throws {
-        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "legacy_home_map",
-                                                           withExtension: "json"))
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "legacy_home_map", withExtension: "json",
+                                                    subdirectory: "Fixtures"))
         let store = PlaceStore(directory: dir)
         let place = try store.importPlace(from: Data(contentsOf: url))
         XCTAssertTrue(try XCTUnwrap(place.landmark(forMarker: 0)).isHazard)
     }
 
+    // REQ-PLACE-05
     func testImportRenumbersDuplicatesButHazardsKeepTheirNumber() throws {
         let dup = Place(name: "Dup", landmarks: [
             Landmark(marker: 3, name: "A", kind: .landmark),
@@ -107,6 +115,7 @@ final class PlaceStoreTests: XCTestCase {
                        "the printed #3 must keep meaning the hazard")
     }
 
+    // REQ-PLACE-02
     func testImportDoesNotReplaceTheActivePlace() throws {
         let store = PlaceStore(directory: dir)
         let home = store.addPlace(named: "Home")
@@ -115,11 +124,13 @@ final class PlaceStoreTests: XCTestCase {
         XCTAssertEqual(store.activePlaceID, home.id)
     }
 
+    // REQ-PLACE-06
     func testCorruptLoadIsReported() throws {
         try Data("{not json".utf8).write(to: dir.appendingPathComponent("places.json"))
         XCTAssertNotNil(PlaceStore(directory: dir).problem)
     }
 
+    // REQ-PLACE-04
     func testImportRejectsGarbage() {
         let store = PlaceStore(directory: dir)
         XCTAssertThrowsError(try store.importPlace(from: Data("hello".utf8)))

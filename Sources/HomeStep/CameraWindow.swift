@@ -1,6 +1,7 @@
 import ARKit
 import RealityKit
 import SwiftUI
+import HomeStepCore
 
 /// The live camera picture in the lower half of the guide screen, the part the
 /// mount covers, so it never takes space from a control. It's for a sighted

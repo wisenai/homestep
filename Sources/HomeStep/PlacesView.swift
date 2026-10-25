@@ -1,25 +1,9 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import HomeStepCore
 
 extension UTType {
     static let homeStepPlace = UTType(exportedAs: "com.sathvik.homestep.place", conformingTo: .json)
-}
-
-extension Place {
-    /// A ready-made place, so anyone can hear HomeStep work straight away:
-    /// print these four markers and walk past them.
-    static func sample() -> Place {
-        Place(name: "Sample home", landmarks: [
-            Landmark(marker: 1, name: "Front door", kind: .landmark,
-                     note: "Inside, on the door frame at knee height."),
-            Landmark(marker: 2, name: "Kitchen", kind: .landmark,
-                     note: "On the kitchen door frame."),
-            Landmark(marker: 3, name: "Living room", kind: .stepDown,
-                     note: "One stride before the step, facing the hallway."),
-            Landmark(marker: 4, name: "Hallway", cue: "Step up into the hallway.", kind: .stepUp,
-                     note: "Same step, facing the living room."),
-        ])
-    }
 }
 
 /// All the user's places. Markers are looked up in the one in use.
@@ -118,14 +102,6 @@ struct PlacesView: View {
         } message: {
             Text(importError ?? "")
         }
-    }
-}
-
-extension PlaceStore {
-    @discardableResult
-    func importSample() -> Place {
-        // Through import, so it gets fresh ids like any shared place.
-        (try? importPlace(from: exportData(.sample()))) ?? addPlace(named: "Sample home")
     }
 }
 

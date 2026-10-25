@@ -1,6 +1,7 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import UIKit
+import HomeStepCore
 
 /// Printable markers for a place: one US Letter page each, a large QR code
 /// with the landmark's name and number underneath so whoever tapes them up can

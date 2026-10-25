@@ -1,6 +1,7 @@
 import ARKit
 import CoreImage
 import UIKit
+import HomeStepCore
 
 /// Turns the LiDAR depth map into a coloured overlay lined up with the camera
 /// picture: near is warm (red, yellow), far is cool (blue). Display only.

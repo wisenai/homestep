@@ -1,21 +1,24 @@
 import XCTest
-@testable import HomeStep
+@testable import HomeStepCore
 
 final class PlaceTests: XCTestCase {
 
     // MARK: Marker payload
 
+    // REQ-MARK-01
     func testDecodesHomeStepPayload() {
         XCTAssertEqual(MarkerPayload.decode("akshi:7"), 7)
         XCTAssertEqual(MarkerPayload.decode("AKSHI:12"), 12)
     }
 
+    // REQ-MARK-01
     func testDecodesBareIntegerFromOriginalMarkers() {
-        // Markers printed for the original house encode bare numbers.
+        // The first markers we printed encode bare numbers.
         XCTAssertEqual(MarkerPayload.decode("3"), 3)
         XCTAssertEqual(MarkerPayload.decode("0"), 0)
     }
 
+    // REQ-MARK-01
     func testIgnoresUnrelatedQRCodes() {
         for junk in ["https://example.com", "12abc", "akshi:", "akshi:-1", "-4", "",
                      "WIFI:S:home;T:WPA;P:pw;;", "akshi:99999999999999999999"] {
@@ -23,6 +26,7 @@ final class PlaceTests: XCTestCase {
         }
     }
 
+    // REQ-MARK-01
     func testEncodeRoundTrips() {
         XCTAssertEqual(MarkerPayload.encode(5), "akshi:5")
         XCTAssertEqual(MarkerPayload.decode(MarkerPayload.encode(42)), 42)
@@ -30,6 +34,7 @@ final class PlaceTests: XCTestCase {
 
     // MARK: Place
 
+    // REQ-MARK-02, REQ-MARK-06
     func testLookupAndNextMarkerNumberFillsGaps() {
         var place = Place(name: "Home")
         XCTAssertEqual(place.nextMarkerNumber, 1)
@@ -42,6 +47,7 @@ final class PlaceTests: XCTestCase {
         XCTAssertNil(place.landmark(forMarker: 2))
     }
 
+    // REQ-MARK-03
     func testSpokenTextUsesCueOrKindDefault() {
         let custom = Landmark(marker: 1, name: "Living room", cue: "Mind the step", kind: .stepDown)
         XCTAssertEqual(custom.spokenText, "Step down. Mind the step")
@@ -51,6 +57,7 @@ final class PlaceTests: XCTestCase {
         XCTAssertEqual(door.spokenText, "Front door.")
     }
 
+    // REQ-MARK-03
     func testCustomCueOnHazardKeepsTheHazardWords() {
         // A helper typing just a room name must not strip "Step down" from a step.
         let lm = Landmark(marker: 1, name: "Living room", cue: "Living room", kind: .stepDown)
@@ -61,6 +68,7 @@ final class PlaceTests: XCTestCase {
         XCTAssertEqual(stairs.spokenText, "Stairs. Basement")
     }
 
+    // REQ-MARK-04
     func testHazardKinds() {
         XCTAssertFalse(Landmark.Kind.landmark.isHazard)
         for k in [Landmark.Kind.stepDown, .stepUp, .stairs, .hazard] {
@@ -68,11 +76,12 @@ final class PlaceTests: XCTestCase {
         }
     }
 
-    // MARK: Legacy import (the original house map)
+    // MARK: Importing the first version's house map
 
+    // REQ-PLACE-04
     func testLegacyHomeMapConverts() throws {
-        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "legacy_home_map",
-                                                           withExtension: "json"))
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "legacy_home_map", withExtension: "json",
+                                                    subdirectory: "Fixtures"))
         let place = try LegacyHomeMap.place(from: Data(contentsOf: url))
         XCTAssertEqual(place.name, "Grandpa's house")
         let step = try XCTUnwrap(place.landmark(forMarker: 0))

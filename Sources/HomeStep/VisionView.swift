@@ -1,5 +1,6 @@
 import ARKit
 import SwiftUI
+import HomeStepCore
 
 /// "See what HomeStep sees", for helpers setting it up and anyone curious.
 ///

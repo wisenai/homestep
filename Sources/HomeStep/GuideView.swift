@@ -1,4 +1,5 @@
 import SwiftUI
+import HomeStepCore
 
 /// The guide screen. The user may not see it at all, so it's large,
 /// high-contrast and labelled for VoiceOver.

@@ -1,4 +1,5 @@
 import SwiftUI
+import HomeStepCore
 
 struct SettingsView: View {
     @EnvironmentObject var settings: AppSettings

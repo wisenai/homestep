@@ -1,5 +1,6 @@
 import ARKit
 import Vision
+import HomeStepCore
 
 /// Reads printed markers (QR codes) in the camera picture with Vision and
 /// reports their numbers.

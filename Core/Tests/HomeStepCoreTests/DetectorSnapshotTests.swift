@@ -1,6 +1,6 @@
 import XCTest
 import simd
-@testable import HomeStep
+@testable import HomeStepCore
 
 final class DetectorSnapshotTests: XCTestCase {
     // The thresholds the detector ships with.
@@ -13,10 +13,12 @@ final class DetectorSnapshotTests: XCTestCase {
                                   reference: floor, rules: rules)
     }
 
+    // REQ-UI-02
     func testNearSliceIsTheReference() {
         XCTAssertEqual(kind([.near], height: floor), .reference)
     }
 
+    // REQ-UI-02
     func testProbeClassesMatchTheDetectorThresholds() {
         XCTAssertEqual(kind([.far], height: floor), .level)
         XCTAssertEqual(kind([.far], height: floor - 0.069), .level, "just inside the band is still floor")
@@ -24,6 +26,7 @@ final class DetectorSnapshotTests: XCTestCase {
         XCTAssertEqual(kind([.far], height: floor + 0.071), .high)
     }
 
+    // REQ-UI-02
     func testObstacleWinsOverRaisedFloorWithinRange() {
         XCTAssertEqual(kind([.far, .candidate], ahead: 0.5, height: floor + 0.30), .obstacle)
         XCTAssertEqual(kind([.candidate], ahead: 0.5, height: floor + 0.24), nil,
@@ -32,15 +35,19 @@ final class DetectorSnapshotTests: XCTestCase {
                        "beyond obstacle range: the detector ignores it, so do we")
     }
 
+    // REQ-UI-02
     func testNoReferenceMeansNothingButRawProbe() {
         let s = DetectorSnapshot.Sample(world: .zero, ahead: 0.6, height: -1, zone: [.far])
         XCTAssertNil(DetectorSnapshot.classify(s, reference: nil, rules: rules),
                      "without a reference floor the detector decides nothing; show nothing")
     }
 
+    // REQ-UI-02
     func testProfileMapping() {
-        // Height relative to the reference, clamped into the plotted band.
-        XCTAssertEqual(DetectorSnapshot.relativeHeight(-1.2, reference: -1.0), -0.2, accuracy: 1e-5)
-        XCTAssertEqual(DetectorSnapshot.relativeHeight(-1.0, reference: -1.0), 0, accuracy: 1e-5)
+        // Each point keeps its height above the reference floor.
+        let s = DetectorSnapshot.Sample(world: .zero, ahead: 0.6, height: -1.2, zone: [.far])
+        let snap = DetectorSnapshot.build(samples: [s], reference: -1.0, drop: nil, stepDistance: nil,
+                                          obstacle: nil, warnDistance: 0.45, rules: rules)
+        XCTAssertEqual(snap.points.first?.relative ?? 0, -0.2, accuracy: 1e-5)
     }
 }

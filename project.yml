@@ -7,6 +7,10 @@ options:
   createIntermediateGroups: true
 
 # Your signing team lives here, per machine (see Config/Signing.example.xcconfig).
+packages:
+  HomeStepCore:
+    path: Core
+
 configFiles:
   Debug: Config/Signing.xcconfig
   Release: Config/Signing.xcconfig
@@ -18,6 +22,8 @@ targets:
     sources:
       - Sources
       - Resources
+    dependencies:
+      - package: HomeStepCore
     info:
       path: HomeStep/Info.plist
       properties:
