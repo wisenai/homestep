@@ -166,9 +166,14 @@ struct Walk {
         var outcome: StepDetector.Outcome
     }
 
-    var detector = StepDetector()
-    var warnDistance: Float = 0.45
+    var detector: StepDetector
+    var warnDistance: Float
     private var frameCount: UInt32 = 0
+
+    init(detector: StepDetector = StepDetector(), warnDistance: Float = 0.45) {
+        self.detector = detector
+        self.warnDistance = warnDistance
+    }
 
     /// One frame at a fixed pose.
     mutating func look(_ room: Room, pose: CameraPose, capture: Bool = false) -> StepDetector.Outcome {
