@@ -167,8 +167,8 @@ public struct StepDetector {
     ///   - intrinsics: already scaled to the depth map; nil skips the survey.
     ///   - warnDistance: how far ahead a step is spoken.
     ///   - captureSnapshot: also return the classified points, for display.
-    public mutating func process<F: DepthFrame>(
-        depth: F, camera: CameraPose, intrinsics: CameraIntrinsics?,
+    public mutating func process(
+        depth: DepthMap, camera: CameraPose, intrinsics: CameraIntrinsics?,
         warnDistance: Float, captureSnapshot: Bool = false
     ) -> Outcome {
         let s = settings
@@ -287,7 +287,7 @@ public struct StepDetector {
 
     /// Turn the depth map into world points and sort the useful ones into the
     /// reference strip, the probe strip and the obstacle corridor.
-    private func surveyGround<F: DepthFrame>(_ frame: F, camera: CameraPose, intrinsics: CameraIntrinsics?,
+    private func surveyGround(_ frame: DepthMap, camera: CameraPose, intrinsics: CameraIntrinsics?,
                                              probeMax: Float, capture: Bool) -> Survey {
         var survey = Survey()
         let s = settings

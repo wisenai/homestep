@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core tests (detector, announcer, places, walk scenarios)
+        run: cd Core && swift test -c release -Xswiftc -enable-testing
+      - name: Safety and privacy checks, tool tests
+        run: |
+          python3 tools/check.py
+          python3 -m unittest discover -s tools/tests
+      - name: Every requirement is traced, and traceability.md is up to date
+        run: |
+          python3 tools/trace.py --write
+          git diff --exit-code docs/traceability.md

@@ -6,6 +6,7 @@ import HomeStepCore
 
 final class MarkerSheetTests: XCTestCase {
 
+    // REQ-MARK-05
     func testOnePagePerLandmark() throws {
         let place = Place(name: "Home", landmarks: [
             Landmark(marker: 1, name: "Kitchen", kind: .landmark),
@@ -17,6 +18,7 @@ final class MarkerSheetTests: XCTestCase {
         XCTAssertTrue(doc.page(at: 1)?.string?.contains("Porch") ?? false)
     }
 
+    // REQ-MARK-05, REQ-MARK-01
     func testPrintedQRDecodesBackToItsMarker() throws {
         let image = try XCTUnwrap(MarkerSheet.qrImage(for: 17, side: 300))
         let ci = try XCTUnwrap(CIImage(image: image))
@@ -26,6 +28,7 @@ final class MarkerSheetTests: XCTestCase {
         XCTAssertEqual(MarkerPayload.decode(payload), 17)
     }
 
+    // REQ-MARK-05
     func testFileNameIsSafe() {
         XCTAssertEqual(MarkerSheet.safeFileName("Mum's flat/2nd floor"), "Mum's flat-2nd floor")
         XCTAssertEqual(MarkerSheet.safeFileName("  "), "HomeStep")
@@ -33,6 +36,7 @@ final class MarkerSheetTests: XCTestCase {
 
     /// Writes the sample place's markers to build/sample-markers.pdf when run
     /// from the HomeStep scheme, which sets ARTIFACT_DIR.
+    // REQ-MARK-05, REQ-PLACE-07
     func testWritesReviewMarkerSheet() throws {
         let pdf = MarkerSheet.pdf(for: .sample())
         XCTAssertEqual(PDFDocument(data: pdf)?.pageCount, 4)

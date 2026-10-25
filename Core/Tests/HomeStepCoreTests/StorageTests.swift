@@ -107,11 +107,11 @@ final class StorageTests: XCTestCase {
     // REQ-STEP-01
     func testIntrinsicsScaleToTheDepthMap() {
         let colour = CameraIntrinsics(fx: 1450, fy: 1450, cx: 960, cy: 720)
-        let k = colour.scaled(fromImage: CGSize(width: 1920, height: 1440), toDepth: 256, 192)
+        let k = colour.scaled(fromImage: 1920, 1440, toDepth: 256, 192)
         XCTAssertEqual(k?.fx ?? 0, 193.33, accuracy: 0.01)
         XCTAssertEqual(k?.cx ?? 0, 128, accuracy: 1e-4)
         XCTAssertEqual(k?.cy ?? 0, 96, accuracy: 1e-4)
-        XCTAssertNil(colour.scaled(fromImage: .zero, toDepth: 256, 192))
+        XCTAssertNil(colour.scaled(fromImage: 0, 0, toDepth: 256, 192))
     }
 
     // REQ-STEP-01

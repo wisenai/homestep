@@ -4,9 +4,9 @@
 The reflex layer's thresholds should be argued from these numbers rather than
 from impressions of what the app did. The two that matter most:
 
-  * the NOISE FLOOR of `drop` on level floor — how big a false drop normal gait
+  * the noise floor of `drop` on level floor: how big a false drop normal gait
     manufactures. It has to stay far below stepDownDrop or warnings are random.
-  * the MARGIN between that noise and a real step, which is what a threshold is
+  * the margin between that noise and a real step, which is what a threshold is
     choosing between.
 
 Usage: tools/analyze-log.py logs/session-....jsonl

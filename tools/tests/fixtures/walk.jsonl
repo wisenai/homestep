@@ -1,0 +1,12 @@
+{"device":"iPhone13,4","kind":"session","t":1000.0}
+{"kind":"start","lowPower":false,"t":1000.1,"warnDistance":0.45}
+{"drop":0.003,"far":1700,"kind":"reading","near":1300,"pitch":46.0,"speed":0.3,"swing":12.0,"t":1000.5,"walking":true}
+{"drop":-0.004,"far":1690,"kind":"reading","near":1310,"pitch":45.0,"speed":0.4,"swing":20.0,"t":1000.6,"walking":true}
+{"drop":0.006,"far":1680,"kind":"reading","near":1290,"pitch":44.0,"speed":0.4,"swing":25.0,"t":1000.7,"walking":true}
+{"drop":0.171,"far":1600,"kind":"reading","near":1280,"pitch":45.0,"speed":0.4,"swing":10.0,"t":1001.0,"walking":true}
+{"event":"step:Step down. d=0.52 spoken=false","kind":"event","reading":{"drop":0.171},"t":1001.0}
+{"event":"step:Step down. d=0.44 spoken=true","kind":"event","reading":{"drop":0.172},"t":1001.2}
+{"event":"step:Step down. d=0.44 spoken=true","kind":"event","reading":{"drop":0.172},"t":1001.3}
+{"drop":0.173,"far":1500,"kind":"reading","near":0,"pitch":45.0,"speed":0.2,"swing":5.0,"t":1001.3,"walking":true}
+{"kind":"mark","label":"wrong","reading":{"drop":0.002},"t":1003.0}
+{"kind":"stop","t":1004.0}

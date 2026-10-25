@@ -26,6 +26,7 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    // REQ-SAFE-05, REQ-MARK-06, REQ-UI-01
     func testOnboardingThenSetUpAPlace() {
         app.launchArguments = ["-settings.onboardingDone", "NO", "-resetPlaces"]
         app.launch()
@@ -79,6 +80,7 @@ final class ScreenshotTests: XCTestCase {
         shot("7-settings")
     }
 
+    // REQ-UI-01
     func testGuideScreen() {
         app.launchArguments = ["-settings.onboardingDone", "YES", "-resetPlaces", "-demoRunning"]
         app.launch()

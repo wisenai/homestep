@@ -22,10 +22,11 @@ public struct CameraIntrinsics: Equatable, Sendable {
 
     /// ARKit's intrinsics describe the colour image. The depth map shows the
     /// same view at a lower resolution, so they scale down with it.
-    public func scaled(fromImage image: CGSize, toDepth width: Int, _ height: Int) -> CameraIntrinsics? {
-        guard image.width > 0, image.height > 0 else { return nil }
-        let sx = Float(width) / Float(image.width)
-        let sy = Float(height) / Float(image.height)
+    public func scaled(fromImage imageWidth: Float, _ imageHeight: Float,
+                       toDepth width: Int, _ height: Int) -> CameraIntrinsics? {
+        guard imageWidth > 0, imageHeight > 0 else { return nil }
+        let sx = Float(width) / imageWidth
+        let sy = Float(height) / imageHeight
         return CameraIntrinsics(fx: fx * sx, fy: fy * sy, cx: cx * sx, cy: cy * sy)
     }
 }
@@ -63,30 +64,55 @@ public struct CameraPose: Sendable {
     }
 }
 
-/// One LiDAR depth map: metres per pixel, with ARKit's confidence where known.
-public protocol DepthFrame {
-    var width: Int { get }
-    var height: Int { get }
-    func depth(x: Int, y: Int) -> Float
-    /// 0 low, 1 medium, 2 high; nil when the frame carries no confidence map.
-    func confidence(x: Int, y: Int) -> UInt8?
-}
-
-/// A depth map held in plain arrays, row by row.
-public struct DepthGrid: DepthFrame {
+/// One LiDAR depth map, read in place: Float32 metres per pixel, row by row,
+/// with ARKit's confidence (UInt8: 0 low, 1 medium, 2 high) where known.
+///
+/// A concrete type rather than a protocol, so the detector's per-pixel reads
+/// are direct calls on the phone.
+public struct DepthMap {
     public let width: Int
     public let height: Int
-    public var depths: [Float]
-    public var confidences: [UInt8]?
+    private let depthBase: UnsafeRawPointer?
+    private let depthRowBytes: Int
+    private let confidenceBase: UnsafeRawPointer?
+    private let confidenceRowBytes: Int
 
-    public init(width: Int, height: Int, depths: [Float], confidences: [UInt8]? = nil) {
-        precondition(depths.count == width * height)
-        self.width = width
-        self.height = height
-        self.depths = depths
-        self.confidences = confidences
+    /// The pointers must stay valid while the map is in use. A nil depth
+    /// pointer gives an empty map.
+    public init(width: Int, height: Int, depth: UnsafeRawPointer?, depthRowBytes: Int,
+                confidence: UnsafeRawPointer? = nil, confidenceRowBytes: Int = 0) {
+        self.width = depth == nil ? 0 : width
+        self.height = depth == nil ? 0 : height
+        depthBase = depth
+        self.depthRowBytes = depthRowBytes
+        confidenceBase = confidence
+        self.confidenceRowBytes = confidenceRowBytes
     }
 
-    public func depth(x: Int, y: Int) -> Float { depths[y * width + x] }
-    public func confidence(x: Int, y: Int) -> UInt8? { confidences?[y * width + x] }
+    func depth(x: Int, y: Int) -> Float {
+        depthBase!.advanced(by: y * depthRowBytes).assumingMemoryBound(to: Float32.self)[x]
+    }
+
+    /// Nil when the map carries no confidence.
+    func confidence(x: Int, y: Int) -> UInt8? {
+        confidenceBase.map { $0.advanced(by: y * confidenceRowBytes).assumingMemoryBound(to: UInt8.self)[x] }
+    }
+
+    /// A map over plain arrays, valid inside `body`.
+    public static func withArrays<R>(width: Int, height: Int, depths: [Float], confidences: [UInt8]? = nil,
+                                     _ body: (DepthMap) -> R) -> R {
+        precondition(depths.count == width * height)
+        return depths.withUnsafeBytes { d in
+            guard let confidences else {
+                return body(DepthMap(width: width, height: height, depth: d.baseAddress,
+                                     depthRowBytes: width * MemoryLayout<Float>.stride))
+            }
+            precondition(confidences.count == width * height)
+            return confidences.withUnsafeBytes { c in
+                body(DepthMap(width: width, height: height, depth: d.baseAddress,
+                              depthRowBytes: width * MemoryLayout<Float>.stride,
+                              confidence: c.baseAddress, confidenceRowBytes: width))
+            }
+        }
+    }
 }

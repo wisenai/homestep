@@ -189,8 +189,9 @@ final class StepDetectorTests: XCTestCase {
         var walk = Walk()
         var depth = RenderedDepth(room: .flat(), pose: Rig.pose())
         depth.confidenceLevel = 0
-        let out = walk.detector.process(depth: depth, camera: Rig.pose(), intrinsics: Rig.intrinsics,
-                                        warnDistance: 0.45)
+        let out = depth.withMap {
+            walk.detector.process(depth: $0, camera: Rig.pose(), intrinsics: Rig.intrinsics, warnDistance: 0.45)
+        }
         XCTAssertEqual(out.reading.groundCount, 0)
         XCTAssertNil(out.reading.floorReference)
     }
@@ -198,12 +199,12 @@ final class StepDetectorTests: XCTestCase {
     // REQ-STEP-11
     func testDepthOutsideRangeIsIgnored() {
         var detector = StepDetector()
-        let far = DepthGrid(width: 8, height: 8, depths: Array(repeating: 6.0, count: 64))
-        let out = detector.process(depth: far, camera: Rig.pose(), intrinsics: Rig.intrinsics, warnDistance: 0.45)
-        XCTAssertEqual(out.reading.groundCount, 0)
-        let nan = DepthGrid(width: 8, height: 8, depths: Array(repeating: .nan, count: 64))
-        XCTAssertEqual(detector.process(depth: nan, camera: Rig.pose(), intrinsics: Rig.intrinsics,
-                                        warnDistance: 0.45).reading.groundCount, 0)
+        for value in [Float(6.0), .nan, 0.05] {
+            let out = DepthMap.withArrays(width: 8, height: 8, depths: Array(repeating: value, count: 64)) {
+                detector.process(depth: $0, camera: Rig.pose(), intrinsics: Rig.intrinsics, warnDistance: 0.45)
+            }
+            XCTAssertEqual(out.reading.groundCount, 0, "\(value)")
+        }
     }
 
     // REQ-STEP-11
@@ -219,8 +220,9 @@ final class StepDetectorTests: XCTestCase {
     // REQ-STEP-11
     func testNoIntrinsicsMeansNoSurvey() {
         var detector = StepDetector()
-        let out = detector.process(depth: RenderedDepth(room: .flat(), pose: Rig.pose()), camera: Rig.pose(),
-                                   intrinsics: nil, warnDistance: 0.45)
+        let out = RenderedDepth(room: .flat(), pose: Rig.pose()).withMap {
+            detector.process(depth: $0, camera: Rig.pose(), intrinsics: nil, warnDistance: 0.45)
+        }
         XCTAssertEqual(out.reading.groundCount, 0)
         XCTAssertNil(out.event)
     }

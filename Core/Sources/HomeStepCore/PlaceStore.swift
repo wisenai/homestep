@@ -95,9 +95,9 @@ public final class PlaceStore: ObservableObject {
     }
 
     /// Adds a shared place, or the first version's `home_map.json`. It gets new
-    /// identities, so importing a file twice gives two copies, and it isn't
-    /// switched on: changing places changes what every marker means, so that
-    /// stays the user's choice.
+    /// identities, so importing a file twice gives two copies. It never
+    /// replaces the place in use, since that would change what every marker
+    /// means; it is only put in use when no place is.
     @discardableResult
     public func importPlace(from data: Data) throws -> Place {
         var place: Place

@@ -6,6 +6,8 @@ I built it for my grandfather. He has lost about ninety percent of his sight, an
 
 **HomeStep works with the walking stick. It doesn't replace it.**
 
+> **This is the `spec-driven` branch.** The decision logic has been moved into a Swift package with its own tests, and the project now has a PRD, numbered requirements, specs, a hazard analysis and field protocols ([`docs/`](docs/README.md)). A side-by-side review found no change in behaviour from the build on the phone, but this version **has not been run on the phone yet**. The build that was tested at home is on [`main`](../../tree/main).
+
 <p align="center">
   <img src="docs/photos/app-ready-screen-on-stick.jpg" alt="The iPhone clamped halfway up a black walking stick, showing HomeStep's Start screen" width="30%">
   &nbsp;
@@ -32,16 +34,20 @@ Everything runs on the phone. HomeStep makes no network connections, and no pict
 
 ![How HomeStep works: the LiDAR sensor feeds the step detector, the camera feeds the code reader, and both go to one announcer that speaks, beeps and vibrates](docs/media/architecture.png)
 
+The rules live in a Swift package, `Core/`, which has no iOS-only code and is tested on any Mac. The app in `Sources/HomeStep/` connects those rules to ARKit, Vision, audio and the screen.
+
 | File | What it does |
 |---|---|
-| `Sources/HomeStep/ReflexLayer.swift` | The step and obstacle detector. Reads the LiDAR depth map every frame. |
-| `Sources/HomeStep/MarkerLayer.swift` | Reads the printed QR codes with Apple's Vision framework. |
-| `Sources/HomeStep/Announcer.swift` | The one output channel: speech, beeps and vibration, with step warnings first. |
-| `Sources/HomeStep/GuideController.swift` | Runs a session: owns ARKit, passes frames along, notices when frames stop. |
-| `Sources/HomeStep/Place.swift`, `PlaceStore.swift` | Your places and their codes, saved on the phone. |
-| `Sources/HomeStep/MarkerSheet.swift` | Makes the printable code sheets. |
-| `Sources/HomeStep/VisionView.swift` | "See what HomeStep sees". |
-| `tools/analyze-log.py` | Summarizes a recorded test walk. |
+| `Core/Sources/HomeStepCore/StepDetector.swift` | The step and obstacle detector |
+| `Core/Sources/HomeStepCore/Announcer.swift` | What is said, beeped and buzzed, and when; step warnings first |
+| `Core/Sources/HomeStepCore/Place.swift`, `PlaceStore.swift` | Places, landmarks and the code format, saved on the phone |
+| `Core/Sources/HomeStepCore/GuideRules.swift` | Spoken messages, the aim check, noticing when the camera stops |
+| `Sources/HomeStep/ReflexLayer.swift` | Passes each LiDAR frame to the detector |
+| `Sources/HomeStep/MarkerLayer.swift` | Reads the printed QR codes with Apple's Vision framework |
+| `Sources/HomeStep/Announcer.swift` | Plays the announcer's decisions |
+| `Sources/HomeStep/GuideController.swift` | Runs a session: owns ARKit and passes frames along |
+| `Sources/HomeStep/MarkerSheet.swift`, `VisionView.swift` | The printable code sheets; "See what HomeStep sees" |
+| `tools/analyze-log.py` | Summarizes a recorded test walk |
 
 ### The hard part: a swinging stick
 
@@ -55,7 +61,11 @@ The threshold came from data. In developer mode the app records what it measures
 
 - **On the phone, at home.** Using the live 3D view, I tested ten scenes: flat floor, five step-downs (including one at an angle and one next to an obstacle), a step up, and three obstacles. It caught all of them and stayed quiet on flat floor.
 - **Recorded walks.** `tools/pull-logs.sh` copies test-walk logs off the phone and `tools/analyze-log.py` reports the flat-floor noise against the size of the real step.
-- **Unit and UI tests** cover places and storage, sharing, the code format, the printed sheets and the detector view (`Tests/`), and a UI test walks through first launch and setting up a place (`UITests/`).
+- **Core tests** (`Core/Tests`, about 100) check every rule in [`docs/requirements.md`](docs/requirements.md) that can be checked without a phone. For the detector, a synthetic room is rendered into LiDAR-style depth frames (floors, steps, furniture, gaps with no return) and walked through frame by frame with the cane sweeping.
+- **App tests** check the printed sheets, and a UI test walks through first launch and setting up a place.
+- **Traceability.** Every requirement is tied to a test, a check, a field protocol or an inspection item; `tools/trace.py` fails the build if one isn't. See [`docs/traceability.md`](docs/traceability.md).
+
+The simulated walks found one real issue, which also applies to the build on the phone: with the warn distance set to 0.30–0.40 m, a step beeps but is never named. The default, 0.45 m, is fine. It's tracked as KI-1 in [`docs/specs/step-detector.md`](docs/specs/step-detector.md#known-issues) and will be settled at the real step.
 
 **Not done yet:** a formal trial of ten approaches in each direction at the real step, plus ten with the step's code covered so only LiDAR can catch it. Informal walks catch the step from both directions, but until that trial is run I don't claim more than that.
 
@@ -72,8 +82,10 @@ open HomeStep.xcodeproj
 Tests:
 
 ```sh
-xcodebuild test -project HomeStep.xcodeproj -scheme HomeStep \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+make test-core   # the rules and the simulated walks; no Simulator needed
+make check       # no networking code, privacy, tool tests, traceability
+make test-app    # app tests and the UI test in the Simulator
+make test        # all of the above
 ```
 
 ## Built with

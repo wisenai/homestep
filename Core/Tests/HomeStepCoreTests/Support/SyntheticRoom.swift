@@ -113,9 +113,10 @@ struct Rig {
     }
 }
 
-/// What the LiDAR returns for one pose in one room. Pixels are rendered on
-/// demand, since the detector only reads every other one.
-struct RenderedDepth: DepthFrame {
+/// What the LiDAR returns for one pose in one room. Only every other pixel
+/// each way is rendered (the rest are NaN), since that is all the detector
+/// reads at its default stride.
+struct RenderedDepth {
     let room: Room
     let pose: CameraPose
     var seed: UInt32 = 0
@@ -134,7 +135,17 @@ struct RenderedDepth: DepthFrame {
         return hit.t + room.noise * jitter(x, y)
     }
 
-    func confidence(x: Int, y: Int) -> UInt8? { confidenceLevel }
+    /// The rendered frame as a `DepthMap`, valid inside `body`.
+    func withMap<R>(_ body: (DepthMap) -> R) -> R {
+        var depths = [Float](repeating: .nan, count: width * height)
+        for y in stride(from: 0, to: height, by: 2) {
+            for x in stride(from: 0, to: width, by: 2) {
+                depths[y * width + x] = depth(x: x, y: y)
+            }
+        }
+        let confidences = confidenceLevel.map { [UInt8](repeating: $0, count: width * height) }
+        return DepthMap.withArrays(width: width, height: height, depths: depths, confidences: confidences, body)
+    }
 
     /// Repeatable noise in -1...1, different for every pixel and frame.
     private func jitter(_ x: Int, _ y: Int) -> Float {
@@ -163,8 +174,10 @@ struct Walk {
     mutating func look(_ room: Room, pose: CameraPose, capture: Bool = false) -> StepDetector.Outcome {
         frameCount += 1
         let depth = RenderedDepth(room: room, pose: pose, seed: frameCount)
-        return detector.process(depth: depth, camera: pose, intrinsics: Rig.intrinsics,
-                                warnDistance: warnDistance, captureSnapshot: capture)
+        return depth.withMap {
+            detector.process(depth: $0, camera: pose, intrinsics: Rig.intrinsics,
+                             warnDistance: warnDistance, captureSnapshot: capture)
+        }
     }
 
     /// The same view `count` times, a sixtieth of a second apart.
