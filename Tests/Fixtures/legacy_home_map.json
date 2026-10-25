@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "home": "Grandpa's house",
+  "units": "steps",
+  "nodes": {
+    "0": { "say": "One step down into the living room.", "hazard": true,  "room": "hallway",     "note": "sunken living room threshold, approached from hallway" },
+    "1": { "say": "One step up into the hallway.",       "hazard": true,  "room": "living_room", "note": "same step, approached from living room" },
+    "2": { "say": "Kitchen doorway.",  "hazard": false, "room": "kitchen",     "note": "open doorway, right side of hallway" },
+    "3": { "say": "Bathroom doorway.", "hazard": false, "room": "bathroom",    "note": "door, left side of hallway" },
+    "4": { "say": "Front door.",       "hazard": false, "room": "front_entry", "note": "main entrance" },
+    "5": { "say": "Bedroom.",          "hazard": false, "room": "bedroom",     "note": "end of hall" }
+  },
+  "edges": [
+    { "from": "hallway",     "to": "living_room", "via": "STEP DOWN - hazard" },
+    { "from": "hallway",     "to": "kitchen",     "via": "open doorway, right" },
+    { "from": "hallway",     "to": "bathroom",    "via": "door, left" },
+    { "from": "hallway",     "to": "bedroom",     "via": "end of hall" },
+    { "from": "front_entry", "to": "hallway",     "via": "straight ahead" }
+  ]
+}

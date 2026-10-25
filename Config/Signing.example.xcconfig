@@ -1,0 +1,8 @@
+// Copy this to Config/Signing.xcconfig (which git ignores) and add your Apple
+// developer Team ID to build for a phone. Leave it empty for the Simulator.
+//
+// It lives here rather than in project.yml because it differs per machine, and
+// here it survives `xcodegen generate`; a Team set in Xcode's UI doesn't.
+// Find yours in Xcode > Settings > Accounts.
+
+DEVELOPMENT_TEAM =
